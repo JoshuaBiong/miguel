@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gerry's Grill — Delivery Label Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --red: #C0392B;
+  --red-light: #E74C3C;
+  --red-bg: #FDF2F0;
+  --bg: #F4F3F0;
+  --surface: #FFFFFF;
+  --border: #D8D4CC;
+  --border-light: #E8E5DE;
+  --text: #1A1A1A;
+  --text-mid: #555;
+  --text-muted: #8A8478;
+  --accent: #E8E3DA;
+  --green: #27AE60;
+  --green-bg: #EAFAF1;
+  --blue: #2980B9;
+  --blue-bg: #EBF5FB;
+  --orange: #E67E22;
+  --orange-bg: #FEF5E7;
+  --shadow: 0 1px 4px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+  --radius: 6px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); }
+
+/* ── APP SHELL ── */
+.app-bar {
+  background: var(--text);
+  color: white;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.app-bar h1 {
+  font-family:'JetBrains Mono',monospace;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.app-bar .subtitle {
+  font-size: 11px;
+  opacity: 0.5;
+  margin-left: 12px;
+  font-weight: 400;
+}
+.app-bar .actions { display:flex; gap:8px; align-items:center; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: calc(100vh - 48px);
+  overflow: hidden;
+}
+
+/* ── LEFT: SPREADSHEET ── */
+.left-panel {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 8px;
+}
+.panel-header h2 {
+  font-family:'JetBrains Mono',monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--text-mid);
+  white-space: nowrap;
+}
+.badge-red { background: var(--red-bg); color: var(--red); }
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-blue { background: var(--blue-bg); color: var(--blue); }
+.badge-orange { background: var(--orange-bg); color: var(--orange); }
+
+/* FILE UPLOAD BAR */
+.upload-bar {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border-light);
+  background: #FAFAF8;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.upload-zone {
+  flex: 1;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  background: white;
+}
+.upload-zone:hover, .upload-zone.drag-hover {
+  border-color: var(--red);
+  background: var(--red-bg);
+}
+.upload-zone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.upload-zone .upload-icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+.upload-zone .upload-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.upload-zone .upload-text strong {
+  color: var(--red);
+}
+.upload-zone .upload-formats {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  opacity: 0.7;
+}
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-mid);
+}
+.file-info .file-name {
+  font-weight: 600;
+  color: var(--text);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-info .file-remove {
+  background: none;
+  border: none;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+.file-info .file-remove:hover { background: var(--red-bg); }
+
+/* SHEET TABS */
+.sheet-tabs {
+  padding: 6px 18px;
+  border-bottom: 1px solid var(--border-light);
+  background: #F7F6F3;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+.sheet-tab {
+  font-family:'DM Sans',sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-mid);
+  white-space: nowrap;
+}
+.sheet-tab:hover { background: var(--accent); }
+.sheet-tab.active {
+  background: var(--green);
+  color: white;
+  border-color: var(--green);
+}
+
+/* FILTER BAR */
+.filter-bar {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border-light);
+  background: #FAFAF8;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.filter-btn {
+  font-family:'DM Sans',sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-mid);
+}
+.filter-btn:hover { border-color: var(--text-mid); }
+.filter-btn.active {
+  background: var(--text);
+  color: white;
+  border-color: var(--text);
+}
+
+/* COLUMN PICKER (for grouping) */
+.group-bar {
+  padding: 6px 18px;
+  border-bottom: 1px solid var(--border-light);
+  background: #FEFEFE;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.group-bar label { font-weight: 600; white-space: nowrap; }
+.group-bar select {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: white;
+  color: var(--text);
+}
+
+/* TABLE */
+.table-wrap {
+  flex: 1;
+  overflow: auto;
+}
+.data-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.data-table thead { position: sticky; top: 0; z-index: 10; }
+.data-table th {
+  background: var(--text);
+  color: white;
+  padding: 9px 14px;
+  text-align: left;
+  font-family:'JetBrains Mono',monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border-right: 1px solid rgba(255,255,255,0.1);
+  user-select: none;
+}
+.data-table th.draggable {
+  cursor: grab;
+  position: relative;
+}
+.data-table th.draggable:hover { background: #333; }
+.data-table th.dragging { opacity: 0.5; background: var(--red); }
+.data-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-light);
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-mid);
+}
+.data-table tr { cursor: pointer; transition: background 0.1s; }
+.data-table tbody tr:hover { background: var(--blue-bg); }
+.data-table tbody tr.selected { background: var(--red-bg); }
+.data-table td:first-child { font-weight: 600; color: var(--text); }
+
+.select-all-bar {
+  padding: 8px 18px;
+  background: var(--red-bg);
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.select-all-bar span { font-size: 12px; font-weight: 600; color: var(--red); }
+
+/* ── RIGHT ── */
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* LABEL TEMPLATE */
+.template-section {
+  flex-shrink: 0;
+  border-bottom: 2px solid var(--border);
+}
+.template-card {
+  margin: 16px 18px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 0;
+  background: white;
+}
+.template-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--red);
+  font-size: 13px;
+}
+.template-table td {
+  border: 1px solid #bbb;
+  padding: 10px 14px;
+  vertical-align: top;
+}
+.template-table .fixed-row td {
+  font-weight: 700;
+  font-size: 14px;
+  background: #FFF9F8;
+}
+.template-table .dynamic-row td {
+  background: #FEFEFE;
+  min-height: 36px;
+}
+.drop-zone {
+  display: inline-block;
+  min-width: 100px;
+  min-height: 24px;
+  border: 1px dashed var(--red-light);
+  border-radius: 3px;
+  padding: 3px 10px;
+  margin: 2px 4px;
+  font-size: 12px;
+  color: var(--red);
+  background: var(--red-bg);
+  cursor: pointer;
+  transition: all 0.15s;
+  vertical-align: middle;
+}
+.drop-zone:hover { background: #FBE4E0; }
+.drop-zone.filled {
+  background: var(--red);
+  color: white;
+  border-style: solid;
+  font-weight: 600;
+}
+.drop-zone.drag-over {
+  background: var(--red-light);
+  color: white;
+  transform: scale(1.02);
+}
+.template-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 8px 18px 12px;
+  text-align: center;
+}
+
+/* GENERATED LABELS */
+.labels-section {
+  flex: 1;
+  overflow: auto;
+  background: #E8E6E2;
+}
+.labels-header {
+  padding: 14px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.labels-scroll {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+/* A4 PAGE */
+.a4-page {
+  width: 210mm;
+  min-height: 297mm;
+  background: white;
+  box-shadow: var(--shadow-md);
+  padding: 20mm;
+  page-break-after: always;
+  position: relative;
+}
+.a4-page .page-num {
+  position: absolute;
+  bottom: 10mm;
+  right: 15mm;
+  font-size: 10px;
+  color: #ccc;
+  font-family:'JetBrains Mono',monospace;
+}
+.label-full {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--red);
+  font-family: 'DM Sans', sans-serif;
+}
+.label-full td {
+  border: 1px solid #999;
+  padding: 14px 18px;
+  vertical-align: top;
+}
+.label-full .lbl-header td { font-weight: 700; font-size: 20px; }
+.label-full .lbl-address td { font-weight: 700; font-size: 17px; }
+.label-full .lbl-phone td { font-weight: 700; font-size: 17px; }
+.label-full .lbl-entry td { font-size: 15px; line-height: 1.7; }
+.label-full .lbl-entry .store-bold { font-weight: 700; }
+
+/* BUTTONS */
+.btn {
+  font-family:'DM Sans',sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.btn-primary { background: var(--red); color: white; }
+.btn-primary:hover { background: var(--red-light); }
+.btn-dark { background: var(--text); color: white; }
+.btn-dark:hover { opacity: 0.85; }
+.btn-outline { background: white; color: var(--text); border: 1px solid var(--border); }
+.btn-outline:hover { background: var(--accent); }
+.btn-sm { font-size: 11px; padding: 5px 12px; }
+
+.empty-msg {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.empty-msg .empty-icon { font-size: 32px; margin-bottom: 12px; }
+
+/* LOADING OVERLAY */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+.loading-box {
+  background: white;
+  border-radius: 8px;
+  padding: 32px 40px;
+  text-align: center;
+  box-shadow: var(--shadow-md);
+}
+.loading-box .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--red);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-box p { font-size: 13px; color: var(--text-mid); }
+
+/* ── PRINT ── */
+@media print {
+  body { background: white; }
+  .app-bar, .left-panel, .template-section, .labels-header, .panel-header,
+  .filter-bar, .select-all-bar, .upload-bar, .sheet-tabs, .group-bar { display: none !important; }
+  .layout { display: block; height: auto; }
+  .right-panel { height: auto; overflow: visible; }
+  .labels-section { overflow: visible; background: white; }
+  .labels-scroll { padding: 0; gap: 0; }
+  .a4-page {
+    box-shadow: none;
+    margin: 0;
+    page-break-after: always;
+    page-break-inside: avoid;
+  }
+  .a4-page .page-num { color: #999; }
+}
+@page { size: A4; margin: 0; }
+</style>
+</head>
+<body>
+
+<div class="app-bar">
+  <div style="display:flex;align-items:center;">
+    <h1>Gerry's Grill</h1>
+    <span class="subtitle">Delivery Label Generator</span>
+  </div>
+  <div class="actions">
+    <span class="badge badge-orange" id="fileNameBadge" style="display:none;"></span>
+    <button class="btn btn-outline btn-sm" onclick="generateAll()" id="btnGenAll">Generate All Labels</button>
+    <button class="btn btn-dark btn-sm" onclick="window.print()">⎙ Print Labels</button>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- LEFT: SPREADSHEET -->
+  <div class="left-panel">
+    <div class="panel-header">
+      <h2>Spreadsheet Data</h2>
+      <span class="badge" id="totalBadge">0 records</span>
+    </div>
+
+    <!-- FILE UPLOAD -->
+    <div class="upload-bar">
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.tsv" onchange="handleFileUpload(event)">
+        <div class="upload-icon">📂</div>
+        <div class="upload-text"><strong>Click to upload</strong> or drag & drop</div>
+        <div class="upload-formats">.xlsx · .xls · .csv · .tsv</div>
+      </div>
+    </div>
+
+    <!-- FILE INFO (shown after upload) -->
+    <div id="fileInfoBar" style="display:none;" class="upload-bar">
+      <div class="file-info">
+        <span>📄</span>
+        <span class="file-name" id="loadedFileName"></span>
+        <span class="badge badge-green" id="loadedFileRows"></span>
+        <button class="file-remove" onclick="clearFile()" title="Remove file">✕</button>
+      </div>
+      <button class="btn btn-sm btn-outline" onclick="document.getElementById('fileInputReplace').click()">Replace File</button>
+      <input type="file" id="fileInputReplace" accept=".xlsx,.xls,.csv,.tsv" onchange="handleFileUpload(event)" style="display:none;">
+    </div>
+
+    <!-- SHEET TABS -->
+    <div class="sheet-tabs" id="sheetTabs" style="display:none;"></div>
+
+    <!-- GROUP BY FILTER -->
+    <div class="group-bar" id="groupBar" style="display:none;">
+      <label>Group / Filter by:</label>
+      <select id="groupColSelect" onchange="onGroupColChange()">
+        <option value="">— None —</option>
+      </select>
+    </div>
+
+    <div class="filter-bar" id="filterBar" style="display:none;"></div>
+    <div class="select-all-bar" id="selectBar" style="display:none;">
+      <span><span id="selectedCount">0</span> selected</span>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm btn-outline" onclick="selectAllVisible()">Select All Visible</button>
+        <button class="btn btn-sm btn-outline" onclick="deselectAll()">Deselect All</button>
+        <button class="btn btn-sm btn-primary" onclick="generateSelected()">Generate Selected</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="dataTable">
+        <thead><tr id="tableHead"></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right-panel">
+    <!-- TEMPLATE -->
+    <div class="template-section">
+      <div class="panel-header">
+        <h2>Label Template</h2>
+        <span class="badge badge-red">Drag columns from table headers</span>
+      </div>
+      <div class="template-card">
+        <table class="template-table">
+          <tr class="fixed-row"><td>DAVAO FRUITS (MAPP PRIVATE SERVICES)</td></tr>
+          <tr class="fixed-row"><td>MANDUG ROAD, BUHANGIN DISTRICT, DAVAO CITY</td></tr>
+          <tr class="fixed-row"><td>0976 184 3406</td></tr>
+          <tr class="dynamic-row"><td>
+            <span class="drop-zone filled" data-slot="line1a" data-col="BM/CP">BM/CP</span>
+            <span style="color:var(--red);font-weight:700;">|</span>
+            <span class="drop-zone filled" data-slot="line1b" data-col="STORES">STORES</span>
+            <span style="color:var(--red);font-weight:700;">|</span>
+            <span class="drop-zone filled" data-slot="line1c" data-col="ORDER QTY">ORDER QTY</span>
+            <br>
+            <span class="drop-zone filled" data-slot="line2" data-col="CONTACT NUMBER">CONTACT NUMBER</span>
+          </td></tr>
+          <tr class="dynamic-row"><td>
+            <span class="drop-zone filled" data-slot="line3a" data-col="STORES" style="font-weight:700;">STORES</span>
+            <span class="drop-zone filled" data-slot="line3b" data-col="COMPLETE STORE ADDRESSES">COMPLETE STORE ADDRESSES</span>
+          </td></tr>
+        </table>
+      </div>
+      <div class="template-hint">Drop zones are pre-mapped. Drag any column header to reassign a field.</div>
+    </div>
+
+    <!-- LABELS OUTPUT -->
+    <div class="labels-section">
+      <div class="labels-header">
+        <h2 style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);">Generated Labels</h2>
+        <span class="badge badge-green" id="labelCount">0 labels</span>
+      </div>
+      <div class="labels-scroll" id="labelsOutput">
+        <div class="empty-msg">
+          <div class="empty-icon">🏷️</div>
+          Upload a spreadsheet, select rows, and generate labels.<br>
+          Or use "Generate All Labels" to create labels for all records.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+let RAW_DATA = [{"PATCH": "PATCH 1", "STORES": "MANAOAG", "COMPLETE STORE ADDRESSES": "Binalonan-Dagupan Highway, Barangay Licsi (near Barangay Calaocan), Manaoag, 2430 Pangasinan", "BM/CP": "Divine Calera Mamuyac", "CONTACT NUMBER": "9507915206", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "439", "TOTAL": "1114", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1114", "LBC TRACKING NUMBER": "313935645968", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "ROBINSONS CALASIAO", "COMPLETE STORE ADDRESSES": "Level 1, Robinsons Place Pangasinan, MacArthur Highway, Barangay San Miguel, Calasiao, 2418 Pangasinan", "BM/CP": "Kristine Sally Gutierrez", "CONTACT NUMBER": "9399382545", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "491", "TOTAL": "1166", "AMOUNT RECEIVED": "1181", "REMAINING BALANCE": "15", "LBC TRACKING NUMBER": "313935646719", "REMARKS": "For Refund", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "ROBINSONS ILOCOS", "COMPLETE STORE ADDRESSES": "Level 1, Robinsons Place Ilocos, Barangay 1 San Francisco, San Nicolas, 2901 Ilocos Norte", "BM/CP": "Margie Ubaldo", "CONTACT NUMBER": "9926233416", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "439", "TOTAL": "1114", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1114", "LBC TRACKING NUMBER": "313935645871", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 1", "STORES": "SM CITY LA UNION", "COMPLETE STORE ADDRESSES": "Level 2, SM City La Union, Diversion Road, Barangay Biday, San Fernando City, 2500 La Union", "BM/CP": "Joshua Erico Posadas", "CONTACT NUMBER": "9369932921", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "491", "TOTAL": "1166", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1166", "LBC TRACKING NUMBER": "313935647638", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "SM LAOAG", "COMPLETE STORE ADDRESSES": "Lower Ground Level, SM City Laoag, Airport Road, Barangay 51-B Nangalisan West, Laoag City, 2900 Ilocos Norte", "BM/CP": "Lyka Pascual", "CONTACT NUMBER": "9926226515", "ORDER QTY": "4", "UNIT PRICE": "225", "SHIPPING FEE": "545", "TOTAL": "1445", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1445", "LBC TRACKING NUMBER": "321312786627", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "SM ROSALES", "COMPLETE STORE ADDRESSES": "Unit 101-102A, Ground Floor, SM City Rosales, MacArthur Highway, Barangay Carmen East, Rosales, 2441 Pangasinan", "BM/CP": "Allan Cabasal", "CONTACT NUMBER": "9493205998", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "491", "TOTAL": "1166", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1166", "LBC TRACKING NUMBER": "313935645908", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "VIGAN", "COMPLETE STORE ADDRESSES": "RF Aniceto Mansion, 1 Mena Crisologo Street, Barangay II (Poblacion), Vigan City, 2700 Ilocos Sur", "BM/CP": "Rommel Manansala", "CONTACT NUMBER": "9209804171", "ORDER QTY": "4", "UNIT PRICE": "225", "SHIPPING FEE": "605", "TOTAL": "1505", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1505", "LBC TRACKING NUMBER": "321312786617", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "SINDALAAN, SAN FERNANDO", "COMPLETE STORE ADDRESSES": "MacArthur Highway, Barangay Sindalan, City of San Fernando, 2000 Pampanga", "BM/CP": "Raiza Pioquinto", "CONTACT NUMBER": "9173149165", "ORDER QTY": "4", "UNIT PRICE": "225", "SHIPPING FEE": "605", "TOTAL": "1505", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1505", "LBC TRACKING NUMBER": "313935647628", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "HARBOR POINT", "COMPLETE STORE ADDRESSES": "space nos 2088-2089 level 2 ayala mall harbor point sbfz cbd", "BM/CP": "Marlyn Acayan", "CONTACT NUMBER": "9988467611", "ORDER QTY": "4", "UNIT PRICE": "225", "SHIPPING FEE": "605", "TOTAL": "1505", "AMOUNT RECEIVED": "1391", "REMAINING BALANCE": "-114", "LBC TRACKING NUMBER": "313935645851", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 1", "STORES": "SM OLONGAPO", "COMPLETE STORE ADDRESSES": "2nd Level, SM City Olongapo Central, Rizal Avenue, Barangay East Tapinac, Olongapo City, 2200 Zambales", "BM/CP": "Jeffrey Elane", "CONTACT NUMBER": "9190752051", "ORDER QTY": "4", "UNIT PRICE": "225", "SHIPPING FEE": "605", "TOTAL": "1505", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1505", "LBC TRACKING NUMBER": "313935645841", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "SUBIC WATERFRONT", "COMPLETE STORE ADDRESSES": "Lot 89-A Waterfront Rd, Subic Bay Freeport Zone, Olongapo City, 2200 Zambales", "BM/CP": "Camille Simsuango", "CONTACT NUMBER": "9988462475", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "719", "TOTAL": "1844", "AMOUNT RECEIVED": "1844", "REMAINING BALANCE": "0", "LBC TRACKING NUMBER": "321312786647", "REMARKS": "Complete", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "ESTANCIA", "COMPLETE STORE ADDRESSES": "Space 2001 Level 2 Garden Restaurant Ayala Trinoma Brgy Bagong Pagasa Quezon City", "BM/CP": "Siterlene Fernandico", "CONTACT NUMBER": "9476982438", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "467", "TOTAL": "1142", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1142", "LBC TRACKING NUMBER": "313935645891", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 1", "STORES": "SUMULONG", "COMPLETE STORE ADDRESSES": "BEN BLDG NO 6 PALOS VERDES STA CRUZ ANTIPOLO CITY", "BM/CP": "Janry Baxanin", "CONTACT NUMBER": "9196088802", "ORDER QTY": "4", "UNIT PRICE": "225", "SHIPPING FEE": "575", "TOTAL": "1475", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1475", "LBC TRACKING NUMBER": "313935645861", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "SAN FERNANDO", "COMPLETE STORE ADDRESSES": "Invecs Autocentrum Complex, Jose Abad Santos Avenue, City of San Fernando, 2000 Pampanga", "BM/CP": "Jeffrey Gomez", "CONTACT NUMBER": "9988440723", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "491", "TOTAL": "1166", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1166", "LBC TRACKING NUMBER": "313935645881", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 1", "STORES": "AYALA ANGELES", "COMPLETE STORE ADDRESSES": "Level 1, Marquee Mall, Aniceto Gueco Street, Pulung Maragul, Angeles City, 2009 Pampanga", "BM/CP": "Karen Cristobal", "CONTACT NUMBER": "9393670839", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "377", "TOTAL": "827", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-827", "LBC TRACKING NUMBER": "313935645831", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "BALIBAGO", "COMPLETE STORE ADDRESSES": "Villarica Compound, MacArthur Highway, Barangay Balibago, Angeles City, 2009 Pampanga", "BM/CP": "Melanie Mamangun", "CONTACT NUMBER": "9988467614", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "719", "TOTAL": "1844", "AMOUNT RECEIVED": "1775", "REMAINING BALANCE": "-69", "LBC TRACKING NUMBER": "321312786657", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "SM TELABASTAGAN", "COMPLETE STORE ADDRESSES": "Ground Level, SM City Telabastagan, MacArthur Highway, Barangay Telabastagan, San Fernando, 2000 Pampanga", "BM/CP": "Melanie Martin", "CONTACT NUMBER": "9190752050", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "491", "TOTAL": "1166", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1166", "LBC TRACKING NUMBER": "313935647618", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "SM FAIRVIEW", "COMPLETE STORE ADDRESSES": "Ground Floor, Annex 2, SM City Fairview, Quirino Highway corner Regalado Highway, Quezon City, 1118 Metro Manila", "BM/CP": "JOSEFINA TAN KHO KAM", "CONTACT NUMBER": "9615925743", "ORDER QTY": "1", "UNIT PRICE": "225", "SHIPPING FEE": "229", "TOTAL": "454", "AMOUNT RECEIVED": "225", "REMAINING BALANCE": "-229", "LBC TRACKING NUMBER": "362408816196", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "ALIMALL", "COMPLETE STORE ADDRESSES": "Upper Ground Floor, Ali Mall, Times Square Avenue, Araneta City, Cubao, Quezon City, 1109 Metro Manila", "BM/CP": "Gloan Cuevas", "CONTACT NUMBER": "9988467627", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "986", "AMOUNT RECEIVED": "1042", "REMAINING BALANCE": "56", "LBC TRACKING NUMBER": "313935654063", "REMARKS": "For Refund", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 1", "STORES": "SM CLARK", "COMPLETE STORE ADDRESSES": "Stall 143-145, Ground Floor, SM City Clark, Manuel A. Roxas Highway, Barangay Malabanias, Clark Freeport Zone, Angeles City, 2009 Pampanga", "BM/CP": "Ronalyn Canda", "CONTACT NUMBER": "9615925750", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "387", "TOTAL": "1512", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1512", "LBC TRACKING NUMBER": "321317744325", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "GERRYS NEWTOWN", "COMPLETE STORE ADDRESSES": "Level 2, Newtown Plaza Hotel, 43 Claro M. Recto Street corner Leonard Wood Road, Barangay Saint Joseph Village, Baguio City, 2600 Benguet", "BM/CP": "Roselyn Dela Cruz", "CONTACT NUMBER": "9568674884", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-670", "LBC TRACKING NUMBER": "313935654093", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 1", "STORES": "LEGARDA", "COMPLETE STORE ADDRESSES": "G/F, Travelite Express Hotel, Legarda Road corner Abanao Street, Barangay Kayang Extension, Baguio City, 2600 Benguet", "BM/CP": "Jezebel Agsalud", "CONTACT NUMBER": "9087959573", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-670", "LBC TRACKING NUMBER": "313935654083", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 1", "STORES": "TRINOMA", "COMPLETE STORE ADDRESSES": "Level 2, Main Building, TriNoma, North Avenue corner Epifanio de los Santos Avenue (EDSA), Barangay Bagong Pag-asa, Quezon City, 1105 Metro Manila", "BM/CP": "Jhonie", "CONTACT NUMBER": "9988467617", "ORDER QTY": "1", "UNIT PRICE": "225", "SHIPPING FEE": "229", "TOTAL": "454", "AMOUNT RECEIVED": "1350", "REMAINING BALANCE": "896", "LBC TRACKING NUMBER": "362408815149", "REMARKS": "For Refund", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 1", "STORES": "SM BAGUIO", "COMPLETE STORE ADDRESSES": "3rd Floor, SM City Baguio, Luneta Hill, Upper Session Road, Baguio City, 2600 Benguet", "BM/CP": "Karla Regacho", "CONTACT NUMBER": "9086407224", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "719", "TOTAL": "1844", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1844", "LBC TRACKING NUMBER": "321314392289", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "CALLE BISTRO", "COMPLETE STORE ADDRESSES": "Calle Bistro, Ever Gotesco Commonwealth, Commonwealth Avenue corner Don Antonio Road, Barangay Batasan Hills, Quezon City, 1126 Metro Manila", "BM/CP": "Faith Del Rosario", "CONTACT NUMBER": "9175011273", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-51", "LBC TRACKING NUMBER": "313935654101", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "FISHERMALL", "COMPLETE STORE ADDRESSES": "2nd Floor, Fisher Mall, 325 Quezon Avenue corner Roosevelt Avenue, Barangay Del Monte, Quezon City, 1104 Metro Manila", "BM/CP": "Christhoper medua", "CONTACT NUMBER": "9653117365", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-51", "LBC TRACKING NUMBER": "313935654171", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "MATALINO", "COMPLETE STORE ADDRESSES": "29 Matalino St., Diliman, Quezon City, 1100 Metro Manila", "BM/CP": "Nerissa Del Valle", "CONTACT NUMBER": "9176728358", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-51", "LBC TRACKING NUMBER": "313935654161", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "ROBINSONS ORTIGAS", "COMPLETE STORE ADDRESSES": "Level 1, ADB Wing, Robinsons Galleria, EDSA corner Ortigas Avenue, Quezon City, 1110 Metro Manila", "BM/CP": "John Dick C. Llano", "CONTACT NUMBER": "9084011601", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-51", "LBC TRACKING NUMBER": "313935654151", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "SM BACOLOD", "COMPLETE STORE ADDRESSES": "Ground Floor, North Wing, SM City Bacolod, Rizal Street, Reclamation Area, Bacolod City, 6100 Negros Occidental", "BM/CP": "Christine Joy Lacena", "CONTACT NUMBER": "9285077124", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "334", "TOTAL": "784", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-74", "LBC TRACKING NUMBER": "313935646680", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "SM ILOILO", "COMPLETE STORE ADDRESSES": "Lower Ground Floor, NorthPoint, SM City Iloilo, Benigno Aquino Avenue, Mandurriao, Iloilo City, 5000 Iloilo", "BM/CP": "Melvin Nieto Vibal", "CONTACT NUMBER": "9173207184", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "334", "TOTAL": "784", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-74", "LBC TRACKING NUMBER": "313935646670", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "BAUANG LA UNION", "COMPLETE STORE ADDRESSES": "MacArthur Highway, Barangay Quinavite, Bauang, 2501 La Union", "BM/CP": "Julie Ann Gullermo", "CONTACT NUMBER": "9451987035", "ORDER QTY": "1", "UNIT PRICE": "225", "SHIPPING FEE": "223", "TOTAL": "448", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-448", "LBC TRACKING NUMBER": "362408814819", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "MALOLOS", "COMPLETE STORE ADDRESSES": "Ground Floor, Robinsons Place Malolos, MacArthur Highway, Barangay Sumapang Matanda, Malolos City, 3000 Bulacan", "BM/CP": "Ryan Cabillon", "CONTACT NUMBER": "9258258095", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-670", "LBC TRACKING NUMBER": "313935654141", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "SM BALIUAG", "COMPLETE STORE ADDRESSES": "Ground Floor, SM City Baliwag, Do\u00f1a Remedios Trinidad (DRT) Highway, Barangay Pagala, Baliwag, 3006 Bulacan", "BM/CP": "Reichell Manuel", "CONTACT NUMBER": "9162036705", "ORDER QTY": "1", "UNIT PRICE": "225", "SHIPPING FEE": "175", "TOTAL": "400", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-400", "LBC TRACKING NUMBER": "362408815010", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "SM BATAAN", "COMPLETE STORE ADDRESSES": "Ground Level, SM City Bataan, Lerma Street, Barangay Ibayo, Balanga City, 2100 Bataan", "BM/CP": "George Paul Baclao", "CONTACT NUMBER": "9555576340", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "670", "REMAINING BALANCE": "-91", "LBC TRACKING NUMBER": "313935653951", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "SM MARILAO", "COMPLETE STORE ADDRESSES": "Ground Floor, SM City Marilao, MacArthur Highway, Barangay Ibayo, Marilao, 3019 Bulacan", "BM/CP": "Raphael Benedict Esta\u00f1ol", "CONTACT NUMBER": "9287574714", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-670", "LBC TRACKING NUMBER": "313935654121", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "SM PULILAN", "COMPLETE STORE ADDRESSES": "Ground Level, SM Center Pulilan, Do\u00f1a Remedios Trinidad (DRT) Highway corner Plaridel-Pulilan Diversion Road, Barangay Santo Cristo, Pulilan, 3005 Bulacan", "BM/CP": "Miraflor Valte", "CONTACT NUMBER": "9612766214", "ORDER QTY": "1", "UNIT PRICE": "225", "SHIPPING FEE": "175", "TOTAL": "400", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-400", "LBC TRACKING NUMBER": "362408816204", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "STA. MARIA BULACAN", "COMPLETE STORE ADDRESSES": "MH El Paseo Community Hall, Santa Maria Bypass Road, Barangay Sta. Clara, Santa Maria, 3022 Bulacan", "BM/CP": "Shahani Musni", "CONTACT NUMBER": "9756634841", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "670", "REMAINING BALANCE": "0", "LBC TRACKING NUMBER": "313935654111", "REMARKS": "Complete", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "AYALA CEBU", "COMPLETE STORE ADDRESSES": "2nd Level, The Terraces, Ayala Center Cebu, Cardinal Rosales Avenue corner Archbishop Reyes Avenue, Cebu Business Park, Barangay Luz, Cebu City, 6000 Cebu", "BM/CP": "Ma. Christel Tek-ing", "CONTACT NUMBER": "9988467631", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "334", "TOTAL": "784", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-74", "LBC TRACKING NUMBER": "313935646690", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "BOHOL", "COMPLETE STORE ADDRESSES": "Level 4, Bohol Quality (BQ) Mall, Carlos P. Garcia East Avenue, Tagbilaran City, 6300 Bohol", "BM/CP": "Jillian Estorioso", "CONTACT NUMBER": "9190695924", "ORDER QTY": "1", "UNIT PRICE": "225", "SHIPPING FEE": "223", "TOTAL": "448", "AMOUNT RECEIVED": "355", "REMAINING BALANCE": "-93", "LBC TRACKING NUMBER": "362408815109", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "DUMAGUETE", "COMPLETE STORE ADDRESSES": "Ground Floor, Robinsons Place Dumaguete, Lamberto Macias Road (South Road), Barangay Calindagan, Dumaguete City, 6200 Negros Oriental", "BM/CP": "Lhea Flores", "CONTACT NUMBER": "9988467634", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "334", "TOTAL": "784", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-74", "LBC TRACKING NUMBER": "313935646709", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "IT PARK", "COMPLETE STORE ADDRESSES": "2nd Floor, Building F&B 2-3, Ayala Malls Central Bloc, V. Padriga Street, Cebu IT Park, Barangay Apas, Cebu City, 6000 Cebu", "BM/CP": "John Rey Ala", "CONTACT NUMBER": "9190860267", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "651", "TOTAL": "1776", "AMOUNT RECEIVED": "1775", "REMAINING BALANCE": "-1", "LBC TRACKING NUMBER": "321314392279", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "PANGLAO", "COMPLETE STORE ADDRESSES": "Rue De Premier Complex, Alona Beach Road, Barangay Tawala, Panglao, 6340 Bohol", "BM/CP": "Jhonny Villante", "CONTACT NUMBER": "9651934400", "ORDER QTY": "1", "UNIT PRICE": "225", "SHIPPING FEE": "223", "TOTAL": "448", "AMOUNT RECEIVED": "335", "REMAINING BALANCE": "-113", "LBC TRACKING NUMBER": "362408815090", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "ROBINSONS CEBU", "COMPLETE STORE ADDRESSES": "Level 1, Robinsons Galleria Cebu, General Maxilom Avenue Extension corner Sergio Osme\u00f1a Jr. Boulevard, Barangay Tejero, Cebu City, 6000 Cebu", "BM/CP": "Peter Albert Sarnillo", "CONTACT NUMBER": "9694128358", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "205", "TOTAL": "880", "AMOUNT RECEIVED": "977", "REMAINING BALANCE": "97", "LBC TRACKING NUMBER": "313935654181", "REMARKS": "For Refund", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "SM CEBU", "COMPLETE STORE ADDRESSES": "2nd Floor, Main Mall, SM City Cebu, North Reclamation Area (NRA), Barangay Mabolo, Cebu City, 6000 Cebu", "BM/CP": "Junalyn Talago", "CONTACT NUMBER": "9427478330", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "205", "TOTAL": "880", "AMOUNT RECEIVED": "1605", "REMAINING BALANCE": "725", "LBC TRACKING NUMBER": "313935654191", "REMARKS": "For Refund", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "BINONDO", "COMPLETE STORE ADDRESSES": "3rd Floor, Lucky Chinatown Mall, Reina Regente Street, Binondo, Manila, 1006 Metro Manila", "BM/CP": "RUBY S. MILANES", "CONTACT NUMBER": "9083671931", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "766", "REMAINING BALANCE": "5", "LBC TRACKING NUMBER": "313935646512", "REMARKS": "For Refund", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "ROBINSONS ERMITA", "COMPLETE STORE ADDRESSES": "Level 3, Midtown Wing, Robinsons Manila, Pedro Gil Street corner Adriatico Street, Ermita, Manila, 1000 Metro Manila", "BM/CP": "JENNELYN TENORIO", "CONTACT NUMBER": "9611003989", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "567", "TOTAL": "1692", "AMOUNT RECEIVED": "1775", "REMAINING BALANCE": "83", "LBC TRACKING NUMBER": "321317744335", "REMARKS": "For Refund", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "ROBINSONS MALABON", "COMPLETE STORE ADDRESSES": "Level 2, Robinsons Town Mall Malabon, Governor Pascual Avenue corner Crispin Street, Barangay Tinajeros, Malabon City, 1470 Metro Manila", "BM/CP": "Mac Jusayan", "CONTACT NUMBER": "9058500226", "ORDER QTY": "1", "UNIT PRICE": "225", "SHIPPING FEE": "229", "TOTAL": "454", "AMOUNT RECEIVED": "454", "REMAINING BALANCE": "0", "LBC TRACKING NUMBER": "362408815403", "REMARKS": "Complete", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "GAPAN", "COMPLETE STORE ADDRESSES": "Level 1, Robinsons Gapan, Maharlika Highway, Gapan City, 3105 Nueva Ecija", "BM/CP": "Joshua Calderon", "CONTACT NUMBER": "9913753310", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "387", "TOTAL": "1512", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1512", "LBC TRACKING NUMBER": "321317744315", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "ILAGAN", "COMPLETE STORE ADDRESSES": "Ground Floor, XentroMall Ilagan, Pan-Philippine Highway, Barangay Alibagu, City of Ilagan, 3300 Isabela", "BM/CP": "Paul Gian Manaligod", "CONTACT NUMBER": "9173897648", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "387", "TOTAL": "1512", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1512", "LBC TRACKING NUMBER": "321317744355", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "MEXICO", "COMPLETE STORE ADDRESSES": "Maningning Street Unit 6, 1st Floor, NONOS Bldg, Sto Domingo, Mexico, 2021 Pampanga", "BM/CP": "ANGELA FEBERO", "CONTACT NUMBER": "9756818508", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "387", "TOTAL": "1512", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1512", "LBC TRACKING NUMBER": "321317744345", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "ROBINSON SANTIAGO", "COMPLETE STORE ADDRESSES": "Level 1, Robinsons Place Santiago, Maharlika Highway, Barangay Mabini, Santiago City, 3311 Isabela", "BM/CP": "Erick Castelo", "CONTACT NUMBER": "9067775259", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "387", "TOTAL": "1512", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1512", "LBC TRACKING NUMBER": "321317744385", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "ROBINSONS TUGUEGARAO", "COMPLETE STORE ADDRESSES": "Upper Ground Level, Robinsons Place Tuguegarao, Maharlika Highway, Barangay Tanza, Tuguegarao City, 3500 Cagayan", "BM/CP": "Frederick Mabborang", "CONTACT NUMBER": "9970959348", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "387", "TOTAL": "1512", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1512", "LBC TRACKING NUMBER": "321317744395", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "SAN JOSE CITY,NUEVA ECIJA", "COMPLETE STORE ADDRESSES": "Shell Compound, Zone 4, Barangay Malasin, San Jose City, 3121 Nueva Ecija", "BM/CP": "Allan Corpuz", "CONTACT NUMBER": "9667744874", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "387", "TOTAL": "1512", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1512", "LBC TRACKING NUMBER": "321317744403", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "SM CABANATUAN", "COMPLETE STORE ADDRESSES": "4th Floor, SM City Cabanatuan, Maharlika Highway, Barangay Hermogenes Concepcion, Cabanatuan City, 3100 Nueva Ecija", "BM/CP": "Erwin Gopez", "CONTACT NUMBER": "9920408741", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "387", "TOTAL": "1512", "AMOUNT RECEIVED": "1775", "REMAINING BALANCE": "263", "LBC TRACKING NUMBER": "321317744375", "REMARKS": "For Refund", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "SM PAMPANGA", "COMPLETE STORE ADDRESSES": "Building 4, SM City Pampanga, Jose Abad Santos Avenue, Barangay Lagundi, Mexico, 2021 Pampanga", "BM/CP": "ARLEEN TALPLACIDO", "CONTACT NUMBER": "9988467485", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "263", "TOTAL": "938", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-228", "LBC TRACKING NUMBER": "313935654073", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 3", "STORES": "CONGRESSIONAL", "COMPLETE STORE ADDRESSES": "", "BM/CP": "", "CONTACT NUMBER": "", "ORDER QTY": "", "UNIT PRICE": "", "SHIPPING FEE": "", "TOTAL": "", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "", "LBC TRACKING NUMBER": "", "REMARKS": "", "DELIVERY STATUS": ""}, {"PATCH": "PATCH 3", "STORES": "EASTWOOD", "COMPLETE STORE ADDRESSES": "City Walk 1, Eastwood City, Barangay Bagumbayan, Quezon City, 1110 Metro Manila", "BM/CP": "Mark Wynster Gersaniba", "CONTACT NUMBER": "9452672565", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-51", "LBC TRACKING NUMBER": "313935653941", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "ETON CENTRIS", "COMPLETE STORE ADDRESSES": "Units 33-34, Centris Walk Expansion, Cluster 3, Eton Centris, EDSA corner Quezon Avenue, Barangay Pinyahan, Quezon City, 1100 Metro Manila", "BM/CP": "Geoge Paul Baclao", "CONTACT NUMBER": "9176572010", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "320", "TOTAL": "770", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-770", "LBC TRACKING NUMBER": "313905653951", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "VALENZUELA TOWN CENTER", "COMPLETE STORE ADDRESSES": "2nd Floor, Valenzuela Town Center, MacArthur Highway, Barangay Karuhatan, Valenzuela City, 1441 Metro Manila", "BM/CP": "Barbie Del Rosario", "CONTACT NUMBER": "9175678079", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-761", "LBC TRACKING NUMBER": "313935653931", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "SM GRAND CENTRAL", "COMPLETE STORE ADDRESSES": "5th Floor, SM City Grand Central, Rizal Avenue Extension, Grace Park East, Caloocan, 1400 Metro Manila", "BM/CP": "Connie Bignotea", "CONTACT NUMBER": "9171810007", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "335", "REMAINING BALANCE": "-426", "LBC TRACKING NUMBER": "313935653961", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "SM MANILA", "COMPLETE STORE ADDRESSES": "4th Floor, SM City Manila, San Marcelino Street corner Natividad Almeda-Lopez Street, Ermita, Manila, 1000 Metro Manila", "BM/CP": "Jerome B. Serrano", "CONTACT NUMBER": "9084175841", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-51", "LBC TRACKING NUMBER": "313935653971", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "SM SAN LAZARO", "COMPLETE STORE ADDRESSES": "2nd Floor, SM City San Lazaro, Felix Huertas corner A.H. Lacson Street, Santa Cruz, Manila, 1014 Metro Manila", "BM/CP": "Ronnel Casidsid", "CONTACT NUMBER": "9473500140", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "1065", "REMAINING BALANCE": "304", "LBC TRACKING NUMBER": "313935653921", "REMARKS": "For Refund", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "STA MESA", "COMPLETE STORE ADDRESSES": "2nd Floor, Main Building, SM City Sta. Mesa, Magsaysay Boulevard corner Gregorio Araneta Avenue, Barangay Do\u00f1a Imelda, Quezon City, 1113 Metro Manila", "BM/CP": "John Carlo B. Galit", "CONTACT NUMBER": "9053347611", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-51", "LBC TRACKING NUMBER": "313935653911", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 3", "STORES": "SM TARLAC", "COMPLETE STORE ADDRESSES": "2nd Floor, Main Building, SM City Tarlac, MacArthur Highway, Barangay San Roque, Tarlac City, 2300 Tarlac", "BM/CP": "CRISTINA BONIFACIO", "CONTACT NUMBER": "9292101468", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "387", "TOTAL": "1512", "AMOUNT RECEIVED": "1775", "REMAINING BALANCE": "263", "LBC TRACKING NUMBER": "321317744365", "REMARKS": "For Refund", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 4", "STORES": "TAGAYTAY", "COMPLETE STORE ADDRESSES": "Nasugbu Highway, Maharlika West, Tagaytay City, 4120 Cavite", "BM/CP": "El Sha Croox", "CONTACT NUMBER": "9917655756", "ORDER QTY": "8", "UNIT PRICE": "225", "SHIPPING FEE": "1061", "TOTAL": "2861", "AMOUNT RECEIVED": "2824", "REMAINING BALANCE": "-37", "LBC TRACKING NUMBER": "321312786637", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "ROBINSONS GALLERIA SOUTH", "COMPLETE STORE ADDRESSES": "Level 2, Robinsons Galleria South, Km. 31, National Highway (Manila South Road), Barangay Nueva, San Pedro City, 4023 Laguna", "BM/CP": "Salve Guevarra", "CONTACT NUMBER": "9190001188", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-670", "LBC TRACKING NUMBER": "313935654013", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 4", "STORES": "LAGUNA METRO CENTRAL", "COMPLETE STORE ADDRESSES": "Ground Floor, Metro Central Mall, Sitio Antipolo, Barangay Labuin, Santa Cruz, 4009 Laguna", "BM/CP": "Karen Natividad", "CONTACT NUMBER": "9287671724", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-670", "LBC TRACKING NUMBER": "313935654033", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "ROBINSONS STA. ROSA", "COMPLETE STORE ADDRESSES": "Level 1, Robinsons Sta. Rosa, Old National Highway, Barangay Tagapo, City of Santa Rosa, 4026 Laguna", "BM/CP": "Jose Angelo Llamzon", "CONTACT NUMBER": "9307940309", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-670", "LBC TRACKING NUMBER": "313935654201", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 4", "STORES": "AYALA SOLENAD NUVALI", "COMPLETE STORE ADDRESSES": "Space 115-116, Building A, Solenad 2 Mall, Santa Rosa - Tagaytay Road, Nuvali, City of Santa Rosa, 4026 Laguna", "BM/CP": "Annabelle Bernardo", "CONTACT NUMBER": "9271297547", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "40", "LBC TRACKING NUMBER": "313935654043", "REMARKS": "For Refund", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 4", "STORES": "CATARMAN", "COMPLETE STORE ADDRESSES": "Purok 7, National Highway, Barangay Macagtas, Catarman, 6400 Northern Samar", "BM/CP": "Nino Jacobson", "CONTACT NUMBER": "9171793365", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "384", "TOTAL": "834", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-834", "LBC TRACKING NUMBER": "313935645821", "REMARKS": "Pending Payment", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 4", "STORES": "MEGAWORLD SOUTHWOODS", "COMPLETE STORE ADDRESSES": "2nd Floor, Southwoods Mall, Southwoods City, Bi\u00f1an, 4024 Laguna", "BM/CP": "Evelyn Axalan", "CONTACT NUMBER": "", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "670", "REMAINING BALANCE": "0", "LBC TRACKING NUMBER": "313935654023", "REMARKS": "Complete", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "SIERRA VALLEY", "COMPLETE STORE ADDRESSES": "Sierra Valley Commercial Complex, Ortigas Avenue Extension, Barangay San Juan, Cainta, 1900 Rizal", "BM/CP": "REMY DEL ROSARIO", "CONTACT NUMBER": "9688852088", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-761", "LBC TRACKING NUMBER": "313935654053", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "SM LIPA", "COMPLETE STORE ADDRESSES": "Ground Floor, SM City Lipa, Ayala Highway, Lipa City, 4217 Batangas", "BM/CP": "Marivic Nuguid", "CONTACT NUMBER": "9675504616", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "377", "TOTAL": "827", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-827", "LBC TRACKING NUMBER": "313935647668", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "SM LUCENA", "COMPLETE STORE ADDRESSES": "Ground Floor, SM City Lucena, Maharlika Highway corner Dalahican Road, Barangay Ibabang Dupay, Lucena City, 4301 Quezon", "BM/CP": "Lovely Grace Garcia", "CONTACT NUMBER": "9622308663", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "377", "TOTAL": "827", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-117", "LBC TRACKING NUMBER": "313935647658", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 4", "STORES": "SM LEMERY", "COMPLETE STORE ADDRESSES": "Ground Level, SM Center Lemery, Illustre Avenue corner Calle P. Gomez Street, Barangay Poblacion, Lemery, 4209 Batangas", "BM/CP": "Jovanni Arufo", "CONTACT NUMBER": "9554359460", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "334", "TOTAL": "784", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-74", "LBC TRACKING NUMBER": "313935647648", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 4", "STORES": "SM PALAWAN", "COMPLETE STORE ADDRESSES": "Malvar Road, Upper Ground Level, SM City Puerto Princesa, Puerto Princesa City, 5300 Palawan", "BM/CP": "Jo Antoinette Aparecio", "CONTACT NUMBER": "9567166100", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "334", "TOTAL": "784", "AMOUNT RECEIVED": "784", "REMAINING BALANCE": "0", "LBC TRACKING NUMBER": "313935645811", "REMARKS": "Complete", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "ROBINSONS LAS PI\u00d1AS", "COMPLETE STORE ADDRESSES": "Level 2, Robinsons Las Pi\u00f1as, Alabang\u2013Zapote Road, Talon Tres, Las Pi\u00f1as City, 1747 Metro Manila", "BM/CP": "Jane Cabrera", "CONTACT NUMBER": "9988467620", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "567", "TOTAL": "1692", "AMOUNT RECEIVED": "1775", "REMAINING BALANCE": "83", "LBC TRACKING NUMBER": "321317743308", "REMARKS": "For Refund", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "FESTIVAL", "COMPLETE STORE ADDRESSES": "Lower Ground Floor, Water Garden, East Wing, Festival Supermall, Filinvest City, Alabang, Muntinlupa, 1781 Metro Manila", "BM/CP": "LEA LARGA", "CONTACT NUMBER": "9985974221", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "567", "TOTAL": "1692", "AMOUNT RECEIVED": "1775", "REMAINING BALANCE": "83", "LBC TRACKING NUMBER": "321317753276", "REMARKS": "For Refund", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "SM BICUTAN", "COMPLETE STORE ADDRESSES": "2nd Floor, Building A, SM City Bicutan, Do\u00f1a Soledad Avenue corner West Service Road, Barangay Don Bosco, Para\u00f1aque City, 1709 Metro Manila", "BM/CP": "LEA LARGA", "CONTACT NUMBER": "9988467619", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "1436", "AMOUNT RECEIVED": "1775", "REMAINING BALANCE": "339", "LBC TRACKING NUMBER": "313935654251", "REMARKS": "For Refund", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "NEWPORT", "COMPLETE STORE ADDRESSES": "Ground Floor, Butterfly Garden, Resort Drive, Newport City, Pasay City, 1309 Metro Manila", "BM/CP": "Francis Millares", "CONTACT NUMBER": "9988467597", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "383", "TOTAL": "1058", "AMOUNT RECEIVED": "1065", "REMAINING BALANCE": "7", "LBC TRACKING NUMBER": "313935654261", "REMARKS": "For Refund", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "RESORTS WORLD", "COMPLETE STORE ADDRESSES": "Newport City, Resort Dr, Pasay City, 1309 Metro Manila", "BM/CP": "Francis Millares", "CONTACT NUMBER": "9190821399", "ORDER QTY": "3", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "986", "AMOUNT RECEIVED": "1065", "REMAINING BALANCE": "79", "LBC TRACKING NUMBER": "313935654271", "REMARKS": "For Refund", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "AYALA BAY", "COMPLETE STORE ADDRESSES": "3rd Floor, Building B, Central Garden, Ayala Malls Manila Bay, Diosdado Macapagal Boulevard corner Aseana Avenue, Tambo, Para\u00f1aque City, 1701 Metro Manila", "BM/CP": "Jeffrey Barretto", "CONTACT NUMBER": "9209851688", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-51", "LBC TRACKING NUMBER": "313935654211", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "VISTA PLACE TAGUIG", "COMPLETE STORE ADDRESSES": "2nd Floor, Vista Place Taguig, 1630 Levi B. Mariano Ave, Barangay Ususan, Taguig City, 1630 Metro Manila", "BM/CP": "TIFFANY VELASCO", "CONTACT NUMBER": "9190784041", "ORDER QTY": "1", "UNIT PRICE": "225", "SHIPPING FEE": "229", "TOTAL": "454", "AMOUNT RECEIVED": "355", "REMAINING BALANCE": "-99", "LBC TRACKING NUMBER": "362408815139", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "AYALA CIRCUIT", "COMPLETE STORE ADDRESSES": "2nd Level, Ayala Malls Circuit, Hippodromo Street, Barangay Carmona, Makati City, 1204 Metro Manila", "BM/CP": "Ronnie", "CONTACT NUMBER": "9988443936", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-51", "LBC TRACKING NUMBER": "313935654231", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "AYALA MARKET MARKET", "COMPLETE STORE ADDRESSES": "Fiesta Market Extension, LFV-Market-Market, Barangay Fort (Bonifacio Global City), Taguig City, 1630 Metro Manila", "BM/CP": "NENETH MASCARI\u00d1AS", "CONTACT NUMBER": "9988467480", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-51", "LBC TRACKING NUMBER": "313935654241", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "SM MEGAMALL", "COMPLETE STORE ADDRESSES": "SM Megamall Mega Strip B, EDSA corner Do\u00f1a Julia Vargas Avenue, Mandaluyong City, 1550 Metro Manila", "BM/CP": "CHRISTIAN PAUL CANDELARIA", "CONTACT NUMBER": "925569025", "ORDER QTY": "10", "UNIT PRICE": "225", "SHIPPING FEE": "1027", "TOTAL": "3277", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-3277", "LBC TRACKING NUMBER": "331128800181", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "ROBINSONS METROEAST", "COMPLETE STORE ADDRESSES": "Level 2, Robinsons Metro East, Marikina-Infanta Highway (Marcos Highway), Barangay Dela Paz, Pasig City, 1800 Metro Manila", "BM/CP": "WINNIE CRUZ", "CONTACT NUMBER": "9985871921", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-51", "LBC TRACKING NUMBER": "313935654003", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "ROBINSONS ANTIPOLO", "COMPLETE STORE ADDRESSES": "Lower Ground Floor, Robinsons Place Antipolo, Sumulong Highway cor. Circumferential Road, Barangay Dela Paz, Antipolo City, 1870 Rizal", "BM/CP": "MARYJOY ORNALES", "CONTACT NUMBER": "9988467623", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "-51", "LBC TRACKING NUMBER": "313935653991", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "SM BATANGAS", "COMPLETE STORE ADDRESSES": "2nd Floor, Main Building, SM City Batangas, Pastor Village, Barangay Pallocan Kanluran, Batangas City, 4200 Batangas", "BM/CP": "NESTOR SINGAYAN", "CONTACT NUMBER": "9988467621", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "710", "REMAINING BALANCE": "40", "LBC TRACKING NUMBER": "313935653981", "REMARKS": "For Refund", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "SM SAN PABLO", "COMPLETE STORE ADDRESSES": "Ground Floor, SM City San Pablo, Maharlika Highway, Barangay San Rafael, San Pablo City, 4000 Laguna", "BM/CP": "ARGEL ROMERO", "CONTACT NUMBER": "9085377802", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "534", "REMAINING BALANCE": "-136", "LBC TRACKING NUMBER": "313935654221", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 4", "STORES": "ROBINSONS LIPA", "COMPLETE STORE ADDRESSES": "Level 1, Robinsons Place Lipa, President Jose P. Laurel Highway, Unit 01109, Barangay Mataas na Lupa, Lipa City, 4217 Batangas", "BM/CP": "Marivic Nuguid", "CONTACT NUMBER": "9914874644", "ORDER QTY": "1", "UNIT PRICE": "225", "SHIPPING FEE": "253", "TOTAL": "478", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-478", "LBC TRACKING NUMBER": "362408816166", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "AYALA ABREEZA DAVAO", "COMPLETE STORE ADDRESSES": "Gerrys Grill 2nd level, Abreeza Ayala Mall, Bajada. Brgy 19-B Davao City", "BM/CP": "Aries Mutia", "CONTACT NUMBER": "", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "0", "TOTAL": "1125", "AMOUNT RECEIVED": "1125", "REMAINING BALANCE": "0", "LBC TRACKING NUMBER": "", "REMARKS": "Complete", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 5", "STORES": "ROBINSONS TAGUM", "COMPLETE STORE ADDRESSES": "Gerrys Grill Level 2 Robinsons tagum, Brgy Visayan, Tagum City", "BM/CP": "Mary Ann Enero", "CONTACT NUMBER": "9279535247", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "205", "TOTAL": "655", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-655", "LBC TRACKING NUMBER": "313935654281", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "SM LANANG", "COMPLETE STORE ADDRESSES": "Gerrys Grill 2nd level, Abreeza Ayala Mall, Bajada. Brgy 19-B Davao City", "BM/CP": "Aries Mutia", "CONTACT NUMBER": "", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "0", "TOTAL": "1125", "AMOUNT RECEIVED": "1125", "REMAINING BALANCE": "0", "LBC TRACKING NUMBER": "", "REMARKS": "Complete", "DELIVERY STATUS": "Delivered"}, {"PATCH": "PATCH 5", "STORES": "AYALA CENTRIO CDO", "COMPLETE STORE ADDRESSES": "2nd floor centrio Ayala Mall Cm recto ave brgy 24 , Cagayan de Oro City 9000", "BM/CP": "Mark Roger Reyes", "CONTACT NUMBER": "9915767313", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "205", "TOTAL": "655", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-655", "LBC TRACKING NUMBER": "313935654291", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "KCC COTABATO", "COMPLETE STORE ADDRESSES": "Gerrys Grill 2nd level, Abreeza Ayala Mall, Bajada. Brgy 19-B Davao City", "BM/CP": "Aries Mutia", "CONTACT NUMBER": "", "ORDER QTY": "", "UNIT PRICE": "", "SHIPPING FEE": "", "TOTAL": "", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "", "LBC TRACKING NUMBER": "", "REMARKS": "", "DELIVERY STATUS": ""}, {"PATCH": "PATCH 5", "STORES": "ROBINSONS PAGADIAN", "COMPLETE STORE ADDRESSES": "LGF Robinson's Pagadian,  Brgy San Francisco Dist., Pagadian City, Zamboanga del Sur 7016", "BM/CP": "Sheilou May Tan", "CONTACT NUMBER": "9949952606", "ORDER QTY": "", "UNIT PRICE": "", "SHIPPING FEE": "", "TOTAL": "", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "", "LBC TRACKING NUMBER": "", "REMARKS": "", "DELIVERY STATUS": ""}, {"PATCH": "PATCH 5", "STORES": "ROBINSONS CDO", "COMPLETE STORE ADDRESSES": "Rosario crescent level 1 Gerrys Grill Robinsons Mall Brgy 31, Cagayan de oro city", "BM/CP": "Christopher Acu\u00f1a", "CONTACT NUMBER": "9177074993", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "205", "TOTAL": "655", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-655", "LBC TRACKING NUMBER": "313935654308", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "ROBINSONS VALENCIA", "COMPLETE STORE ADDRESSES": "Level 1 Robinson's Place Valencia, Brgy Bagoontaas Valencia city Bukidnon", "BM/CP": "JennevieNangan", "CONTACT NUMBER": "9059485094", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "205", "TOTAL": "655", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-655", "LBC TRACKING NUMBER": "313935638412", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "SM CDO", "COMPLETE STORE ADDRESSES": "Rosario crescent level 1 Gerrys Grill Robinsons Mall Brgy 31, Cagayan de oro city", "BM/CP": "Christopher Acu\u00f1a", "CONTACT NUMBER": "9177074993", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "205", "TOTAL": "655", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-655", "LBC TRACKING NUMBER": "313935638422", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "VERANZA MALL GENSAN", "COMPLETE STORE ADDRESSES": "Gerry's Grill G/F Veranza Mall, J. Catolico Ave, General Santos City", "BM/CP": "Shyne Manias", "CONTACT NUMBER": "9659329623", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "205", "TOTAL": "655", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-655", "LBC TRACKING NUMBER": "313935638432", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "KAWIT", "COMPLETE STORE ADDRESSES": "Antero Soriano Highway, Kawit, Cavite (Along Centennial Road, in front of Evo City). Kawit Cavite", "BM/CP": "Jared Valderama", "CONTACT NUMBER": "9923903814", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "750", "TOTAL": "1875", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1875", "LBC TRACKING NUMBER": "321317743291", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "CARMONA", "COMPLETE STORE ADDRESSES": "460 Vieport Venue J.M. Loyola Street, Brgy. 4, Governors Drive Carmona, Cavite", "BM/CP": "Jeca Delos Santos", "CONTACT NUMBER": "9858809442", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "450", "REMAINING BALANCE": "-220", "LBC TRACKING NUMBER": "313935638442", "REMARKS": "Balance Unpaid", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "VERMOSA", "COMPLETE STORE ADDRESSES": "Ayala Malls Vermosa, Daang Hari Road, Imus, Cavite", "BM/CP": "Randy Victoria", "CONTACT NUMBER": "9553880367", "ORDER QTY": "5", "UNIT PRICE": "225", "SHIPPING FEE": "750", "TOTAL": "1875", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-1875", "LBC TRACKING NUMBER": "321317743318", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "SM BACOOR", "COMPLETE STORE ADDRESSES": "2/F SM City Bacoor Tirona Highway, corner Aguinaldo Hwy, Bacoor, Cavite", "BM/CP": "Tim Porteria", "CONTACT NUMBER": "9925034874", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "827", "REMAINING BALANCE": "157", "LBC TRACKING NUMBER": "313935638452", "REMARKS": "For Refund", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "SM DASMA", "COMPLETE STORE ADDRESSES": "Upper Ground Floor Annex Bldg, SM City Dasmari\u00f1as, Dasmari\u00f1as, Cavite", "BM/CP": "Bryan Escuyos", "CONTACT NUMBER": "9333378344", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-670", "LBC TRACKING NUMBER": "313935638462", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "RSQUARE", "COMPLETE STORE ADDRESSES": "2nd floor Rsquare Mall Taft Avenue, corner P.Ocampo St., Malate, Manila", "BM/CP": "Shai Golimlim", "CONTACT NUMBER": "9515706381", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "311", "TOTAL": "761", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-761", "LBC TRACKING NUMBER": "313935638472", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "ROBINSONS BUTUAN", "COMPLETE STORE ADDRESSES": "Gerrys Grill Robinson Place JC Aquino Ave.  Brgy Bayanihan,  Butuan City", "BM/CP": "Joville Nueva", "CONTACT NUMBER": "9100303138", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "205", "TOTAL": "655", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-655", "LBC TRACKING NUMBER": "313935638482", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "SM BUTUAN", "COMPLETE STORE ADDRESSES": "Gerrys Grill Robinson Place JC Aquino Ave.  Brgy Bayanihan,  Butuan City", "BM/CP": "Joville Nueva", "CONTACT NUMBER": "9100303138", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "205", "TOTAL": "655", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-655", "LBC TRACKING NUMBER": "313935638492", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "DASMA, AGUINALDO", "COMPLETE STORE ADDRESSES": "Lot 3537-A 1 Aguianaldo Highway Zone 1 Poblacion corner Camerino , Dasmarinas Cavite", "BM/CP": "Ellen Forto", "CONTACT NUMBER": "9325252430", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "", "REMAINING BALANCE": "-670", "LBC TRACKING NUMBER": "313935638500", "REMARKS": "Pending Payment", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "SM MOLINO", "COMPLETE STORE ADDRESSES": "Unit 167-168 GF SM Supercenter molino IV, bacoor cavite", "BM/CP": "Glenn Mancilla", "CONTACT NUMBER": "9985616263", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "220", "TOTAL": "670", "AMOUNT RECEIVED": "830", "REMAINING BALANCE": "160", "LBC TRACKING NUMBER": "313935646316", "REMARKS": "For Refund", "DELIVERY STATUS": "In Transit"}, {"PATCH": "PATCH 5", "STORES": "SM LEGAZPI", "COMPLETE STORE ADDRESSES": "Gerry's SM Legazpi Imelda Roces Avenue, Zone 9, Barangay 37, Bitano Legazpi City", "BM/CP": "Jonel M. Sambajon", "CONTACT NUMBER": "9923983832", "ORDER QTY": "2", "UNIT PRICE": "225", "SHIPPING FEE": "320", "TOTAL": "770", "AMOUNT RECEIVED": "850", "REMAINING BALANCE": "80", "LBC TRACKING NUMBER": "313935646326", "REMARKS": "For Refund", "DELIVERY STATUS": "In Transit"}];
+let COLUMNS = [];
+let ALL_SHEETS = {};  // { sheetName: [rows] }
+let ALL_SHEET_COLS = {}; // { sheetName: [cols] }
+let activeSheet = '';
+let selectedRows = new Set();
+let activeFilter = 'ALL';
+let groupCol = '';
+let dragCol = null;
+let currentFileName = '';
+
+const slotMap = {
+  line1a: 'BM/CP',
+  line1b: 'STORES',
+  line1c: 'ORDER QTY',
+  line2: 'CONTACT NUMBER',
+  line3a: 'STORES',
+  line3b: 'COMPLETE STORE ADDRESSES'
+};
+
+// ── DETECT COLUMNS FROM DATA ──
+function detectColumns(data) {
+  if (!data || data.length === 0) return [];
+  const colSet = new Set();
+  data.forEach(row => Object.keys(row).forEach(k => colSet.add(k)));
+  return [...colSet];
+}
+
+// ── INIT WITH EMBEDDED DATA ──
+function initWithEmbedded() {
+  if (RAW_DATA && RAW_DATA.length > 0) {
+    COLUMNS = detectColumns(RAW_DATA);
+    currentFileName = 'GERRY_S_GRILL_MASTER_FILE (embedded)';
+    showFileInfo(currentFileName, RAW_DATA.length);
+    buildGroupSelector();
+    // Auto-detect PATCH-like column
+    const patchCol = COLUMNS.find(c => c.toUpperCase().includes('PATCH'));
+    if (patchCol) {
+      groupCol = patchCol;
+      document.getElementById('groupColSelect').value = patchCol;
+      buildFilters();
+    }
+    buildTable();
+    updateCounts();
+    setupDragDrop();
+  }
+}
+
+// ── FILE UPLOAD ──
+function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  showLoading('Parsing ' + file.name + '...');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+
+      ALL_SHEETS = {};
+      ALL_SHEET_COLS = {};
+
+      workbook.SheetNames.forEach(name => {
+        const sheet = workbook.Sheets[name];
+        const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+        // Clean: find actual header row (first row with multiple non-empty values that look like headers)
+        let cleanedData = json;
+        let cols = [];
+
+        if (cleanedData.length > 0) {
+          // Check if first row looks like real headers or if headers are in data
+          const firstRow = cleanedData[0];
+          const keys = Object.keys(firstRow);
+
+          // If keys look like __EMPTY, __EMPTY_1 etc, the real headers might be in the data
+          const hasAutoKeys = keys.some(k => k.startsWith('__EMPTY'));
+
+          if (hasAutoKeys) {
+            // Try to find the header row
+            let headerIdx = -1;
+            for (let i = 0; i < Math.min(cleanedData.length, 10); i++) {
+              const vals = Object.values(cleanedData[i]).filter(v => v !== '' && v != null);
+              if (vals.length >= 3) {
+                // Check if this looks like headers (mostly strings, short)
+                const allStrings = vals.every(v => typeof v === 'string' && v.length < 50);
+                if (allStrings) { headerIdx = i; break; }
+              }
+            }
+
+            if (headerIdx >= 0) {
+              const headerRow = cleanedData[headerIdx];
+              const headerMap = {};
+              keys.forEach(k => {
+                const val = String(headerRow[k] || '').trim();
+                if (val) headerMap[k] = val;
+              });
+
+              const dataRows = cleanedData.slice(headerIdx + 1);
+              cleanedData = dataRows.map(row => {
+                const newRow = {};
+                Object.entries(headerMap).forEach(([oldKey, newKey]) => {
+                  let val = row[oldKey];
+                  if (val == null) val = '';
+                  else if (val instanceof Date) val = val.toLocaleDateString();
+                  else val = String(val).trim();
+                  newRow[newKey] = val;
+                });
+                return newRow;
+              }).filter(row => {
+                // Remove empty rows
+                const vals = Object.values(row).filter(v => v !== '');
+                return vals.length > 0;
+              });
+              cols = Object.values(headerMap).filter(v => v);
+            } else {
+              cols = keys;
+            }
+          } else {
+            cols = keys;
+            // Stringify all values
+            cleanedData = cleanedData.map(row => {
+              const newRow = {};
+              keys.forEach(k => {
+                let val = row[k];
+                if (val == null) val = '';
+                else if (val instanceof Date) val = val.toLocaleDateString();
+                else val = String(val).trim();
+                newRow[k] = val;
+              });
+              return newRow;
+            }).filter(row => {
+              const vals = Object.values(row).filter(v => v !== '');
+              return vals.length > 0;
+            });
+          }
+        }
+
+        if (cols.length === 0) cols = detectColumns(cleanedData);
+
+        // Remove columns that are empty/unnamed
+        cols = cols.filter(c => c && c.trim() && !c.startsWith('__'));
+
+        ALL_SHEETS[name] = cleanedData;
+        ALL_SHEET_COLS[name] = cols;
+      });
+
+      // Load first sheet
+      const firstSheet = workbook.SheetNames[0];
+      loadSheet(firstSheet);
+      buildSheetTabs(workbook.SheetNames);
+
+      currentFileName = file.name;
+      showFileInfo(file.name, RAW_DATA.length);
+      document.getElementById('fileNameBadge').textContent = '📄 ' + file.name;
+      document.getElementById('fileNameBadge').style.display = 'inline';
+
+      // Show upload replace, hide upload zone
+      document.getElementById('uploadZone').parentElement.style.display = 'none';
+      document.getElementById('fileInfoBar').style.display = 'flex';
+
+      hideLoading();
+    } catch (err) {
+      hideLoading();
+      alert('Error parsing file: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  event.target.value = ''; // Reset so same file can be re-uploaded
+}
+
+function loadSheet(name) {
+  activeSheet = name;
+  RAW_DATA = ALL_SHEETS[name] || [];
+  COLUMNS = ALL_SHEET_COLS[name] || detectColumns(RAW_DATA);
+  selectedRows = new Set();
+  activeFilter = 'ALL';
+  groupCol = '';
+
+  buildGroupSelector();
+
+  // Auto-detect group column (PATCH-like)
+  const patchCol = COLUMNS.find(c => c.toUpperCase().includes('PATCH') || c.toUpperCase().includes('GROUP') || c.toUpperCase().includes('BATCH'));
+  if (patchCol) {
+    groupCol = patchCol;
+    document.getElementById('groupColSelect').value = patchCol;
+    buildFilters();
+  } else {
+    document.getElementById('filterBar').style.display = 'none';
+  }
+
+  // Try to auto-map slots if columns match
+  autoMapSlots();
+
+  buildTable();
+  updateCounts();
+  setupDragDrop();
+  updateSheetTabsActive();
+}
+
+function autoMapSlots() {
+  const colUpper = COLUMNS.map(c => c.toUpperCase());
+  const tryMap = (slot, ...candidates) => {
+    for (const cand of candidates) {
+      const idx = colUpper.findIndex(c => c.includes(cand));
+      if (idx >= 0) {
+        slotMap[slot] = COLUMNS[idx];
+        const zone = document.querySelector(`.drop-zone[data-slot="${slot}"]`);
+        if (zone) {
+          zone.textContent = COLUMNS[idx];
+          zone.dataset.col = COLUMNS[idx];
+          zone.classList.add('filled');
+        }
+        return;
+      }
+    }
+  };
+  tryMap('line1a', 'BM/CP', 'CONTACT NAME', 'NAME', 'BM');
+  tryMap('line1b', 'STORES', 'STORE', 'BRANCH', 'LOCATION');
+  tryMap('line1c', 'ORDER QTY', 'QTY', 'QUANTITY');
+  tryMap('line2', 'CONTACT NUMBER', 'PHONE', 'MOBILE', 'CONTACT');
+  tryMap('line3a', 'STORES', 'STORE', 'BRANCH');
+  tryMap('line3b', 'COMPLETE STORE ADDRESS', 'ADDRESS', 'STORE ADDRESS', 'FULL ADDRESS');
+}
+
+function buildSheetTabs(names) {
+  const container = document.getElementById('sheetTabs');
+  if (names.length <= 1) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'flex';
+  container.innerHTML = names.map(n =>
+    `<button class="sheet-tab${n === activeSheet ? ' active' : ''}" onclick="loadSheet('${n.replace(/'/g, "\\'")}')">${n}</button>`
+  ).join('');
+}
+
+function updateSheetTabsActive() {
+  document.querySelectorAll('.sheet-tab').forEach(t => {
+    t.classList.toggle('active', t.textContent === activeSheet);
+  });
+}
+
+function buildGroupSelector() {
+  const sel = document.getElementById('groupColSelect');
+  sel.innerHTML = '<option value="">— None —</option>';
+  COLUMNS.forEach(c => {
+    sel.innerHTML += `<option value="${c}"${c === groupCol ? ' selected' : ''}>${c}</option>`;
+  });
+  document.getElementById('groupBar').style.display = COLUMNS.length > 0 ? 'flex' : 'none';
+}
+
+function onGroupColChange() {
+  groupCol = document.getElementById('groupColSelect').value;
+  activeFilter = 'ALL';
+  if (groupCol) {
+    buildFilters();
+  } else {
+    document.getElementById('filterBar').style.display = 'none';
+  }
+  buildTable();
+  updateCounts();
+}
+
+function showFileInfo(name, rows) {
+  document.getElementById('loadedFileName').textContent = name;
+  document.getElementById('loadedFileRows').textContent = rows + ' rows';
+  document.getElementById('fileInfoBar').style.display = 'flex';
+  document.getElementById('uploadZone').parentElement.style.display = 'none';
+}
+
+function clearFile() {
+  RAW_DATA = [];
+  COLUMNS = [];
+  ALL_SHEETS = {};
+  ALL_SHEET_COLS = {};
+  activeSheet = '';
+  selectedRows = new Set();
+  groupCol = '';
+  currentFileName = '';
+
+  document.getElementById('fileInfoBar').style.display = 'none';
+  document.getElementById('uploadZone').parentElement.style.display = 'flex';
+  document.getElementById('sheetTabs').style.display = 'none';
+  document.getElementById('filterBar').style.display = 'none';
+  document.getElementById('groupBar').style.display = 'none';
+  document.getElementById('selectBar').style.display = 'none';
+  document.getElementById('fileNameBadge').style.display = 'none';
+  document.getElementById('tableHead').innerHTML = '';
+  document.getElementById('tableBody').innerHTML = '';
+  document.getElementById('totalBadge').textContent = '0 records';
+  document.getElementById('labelsOutput').innerHTML = '<div class="empty-msg"><div class="empty-icon">🏷️</div>Upload a spreadsheet to get started.</div>';
+  document.getElementById('labelCount').textContent = '0 labels';
+
+  // Reset drop zones
+  document.querySelectorAll('.drop-zone').forEach(z => {
+    z.classList.remove('filled');
+    z.textContent = z.dataset.slot;
+  });
+}
+
+// ── FILTERS ──
+function buildFilters() {
+  if (!groupCol) return;
+  const vals = [...new Set(RAW_DATA.map(r => r[groupCol]).filter(Boolean))];
+  const bar = document.getElementById('filterBar');
+  bar.style.display = 'flex';
+  bar.innerHTML = `<button class="filter-btn active" onclick="setFilter('ALL')">All</button>`;
+  vals.forEach(v => {
+    const count = RAW_DATA.filter(r => r[groupCol] === v).length;
+    bar.innerHTML += `<button class="filter-btn" onclick="setFilter('${v.replace(/'/g, "\\'")}')">${v} <span style="opacity:0.6">(${count})</span></button>`;
+  });
+}
+
+function setFilter(val) {
+  activeFilter = val;
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    const match = val === 'ALL' ? b.textContent.trim().startsWith('All') : b.textContent.includes(val);
+    b.classList.toggle('active', match);
+  });
+  buildTable();
+  updateCounts();
+}
+
+function getVisibleData() {
+  if (activeFilter === 'ALL' || !groupCol) return RAW_DATA;
+  return RAW_DATA.filter(r => r[groupCol] === activeFilter);
+}
+
+// ── TABLE ──
+function buildTable() {
+  const head = document.getElementById('tableHead');
+  head.innerHTML = COLUMNS.map(c =>
+    `<th class="draggable" draggable="true" data-col="${c}">${c}</th>`
+  ).join('');
+
+  const data = getVisibleData();
+  const body = document.getElementById('tableBody');
+  body.innerHTML = data.map((row) => {
+    const globalIdx = RAW_DATA.indexOf(row);
+    const sel = selectedRows.has(globalIdx) ? ' selected' : '';
+    return `<tr class="${sel}" data-idx="${globalIdx}" onclick="toggleRow(${globalIdx})">
+      ${COLUMNS.map(c => `<td title="${(row[c] || '').toString().replace(/"/g, '&quot;')}">${row[c] || '—'}</td>`).join('')}
+    </tr>`;
+  }).join('');
+
+  // Drag events on headers
+  document.querySelectorAll('.data-table th.draggable').forEach(th => {
+    th.addEventListener('dragstart', e => {
+      dragCol = th.dataset.col;
+      th.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', dragCol);
+      e.dataTransfer.effectAllowed = 'copy';
+    });
+    th.addEventListener('dragend', () => {
+      th.classList.remove('dragging');
+      dragCol = null;
+    });
+  });
+}
+
+function toggleRow(idx) {
+  if (selectedRows.has(idx)) selectedRows.delete(idx);
+  else selectedRows.add(idx);
+  const tr = document.querySelector(`tr[data-idx="${idx}"]`);
+  if (tr) tr.classList.toggle('selected');
+  updateCounts();
+}
+
+function selectAllVisible() {
+  getVisibleData().forEach(row => selectedRows.add(RAW_DATA.indexOf(row)));
+  buildTable();
+  updateCounts();
+}
+
+function deselectAll() {
+  selectedRows.clear();
+  buildTable();
+  updateCounts();
+}
+
+function updateCounts() {
+  const visible = getVisibleData().length;
+  document.getElementById('totalBadge').textContent = `${visible} records`;
+  document.getElementById('selectedCount').textContent = selectedRows.size;
+  document.getElementById('selectBar').style.display = selectedRows.size > 0 ? 'flex' : 'none';
+}
+
+// ── DRAG & DROP FOR TEMPLATE ──
+function setupDragDrop() {
+  document.querySelectorAll('.drop-zone').forEach(zone => {
+    zone.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      zone.classList.add('drag-over');
+    });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      const col = e.dataTransfer.getData('text/plain');
+      if (col && COLUMNS.includes(col)) {
+        const slot = zone.dataset.slot;
+        slotMap[slot] = col;
+        zone.textContent = col;
+        zone.dataset.col = col;
+        zone.classList.add('filled');
+      }
+    });
+  });
+}
+
+// ── GENERATE LABELS ──
+function generateSelected() {
+  if (selectedRows.size === 0) return;
+  const rows = [...selectedRows].sort((a,b) => a-b).map(i => RAW_DATA[i]);
+  renderLabels(rows);
+}
+
+function generateAll() {
+  if (RAW_DATA.length === 0) return;
+  renderLabels([...RAW_DATA]);
+}
+
+function renderLabels(rows) {
+  const out = document.getElementById('labelsOutput');
+  out.innerHTML = '';
+  let pageNum = 0;
+
+  // Group by groupCol if set
+  let groups;
+  if (groupCol) {
+    const grouped = {};
+    rows.forEach(r => {
+      const g = r[groupCol] || 'UNGROUPED';
+      if (!grouped[g]) grouped[g] = [];
+      grouped[g].push(r);
+    });
+    groups = Object.entries(grouped).sort((a,b) => a[0].localeCompare(b[0]));
+  } else {
+    groups = [['ALL', rows]];
+  }
+
+  groups.forEach(([groupName, groupRows]) => {
+    groupRows.forEach(row => {
+      pageNum++;
+      const page = document.createElement('div');
+      page.className = 'a4-page';
+
+      const l1a = row[slotMap.line1a] || '';
+      const l1b = row[slotMap.line1b] || '';
+      const l1c = row[slotMap.line1c] || '';
+      const l2 = row[slotMap.line2] || '';
+      const l3a = row[slotMap.line3a] || '';
+      const l3b = row[slotMap.line3b] || '';
+      const line1Parts = [l1a, l1b, l1c].filter(Boolean).join(' | ');
+
+      page.innerHTML = `
+        <table class="label-full">
+          <tr class="lbl-header"><td>DAVAO FRUITS (MAPP PRIVATE SERVICES)</td></tr>
+          <tr class="lbl-address"><td>MANDUG ROAD, BUHANGIN DISTRICT, DAVAO CITY</td></tr>
+          <tr class="lbl-phone"><td>0976 184 3406</td></tr>
+          <tr class="lbl-entry"><td>${line1Parts}<br>${l2}</td></tr>
+          <tr class="lbl-entry"><td><span class="store-bold">${l3a}</span> ${l3b}</td></tr>
+        </table>
+        <div class="page-num">${groupCol ? groupName + ' — ' : ''}${pageNum}</div>
+      `;
+      out.appendChild(page);
+    });
+  });
+
+  document.getElementById('labelCount').textContent = `${pageNum} labels`;
+
+  // Scroll to labels
+  document.querySelector('.labels-section').scrollTop = 0;
+}
+
+// ── LOADING ──
+function showLoading(msg) {
+  const overlay = document.createElement('div');
+  overlay.className = 'loading-overlay';
+  overlay.id = 'loadingOverlay';
+  overlay.innerHTML = `<div class="loading-box"><div class="spinner"></div><p>${msg}</p></div>`;
+  document.body.appendChild(overlay);
+}
+function hideLoading() {
+  const el = document.getElementById('loadingOverlay');
+  if (el) el.remove();
+}
+
+// ── DRAG & DROP ON UPLOAD ZONE ──
+const uploadZone = document.getElementById('uploadZone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-hover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-hover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-hover');
+  const files = e.dataTransfer.files;
+  if (files.length > 0) {
+    const input = document.getElementById('fileInput');
+    input.files = files;
+    handleFileUpload({ target: input });
+  }
+});
+
+// ── BOOT ──
+initWithEmbedded();
+</script>
+</body>
+</html>
